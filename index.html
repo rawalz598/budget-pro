@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Budget Pro</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>💰 Budget Pro</h1>
+    
+    <div class="balance-container">
+      <div class="balance-card">
+        <h3>Total Balance</h3>
+        <p id="balance">$0.00</p>
+      </div>
+      <div class="balance-card income-card">
+        <h3>Total Income</h3>
+        <p id="totalIncome">$0.00</p>
+      </div>
+      <div class="balance-card expense-card">
+        <h3>Total Expense</h3>
+        <p id="totalExpense">$0.00</p>
+      </div>
+    </div>
+
+    <div class="input-container">
+      <input type="text" id="description" placeholder="Description">
+      <input type="number" id="amount" placeholder="Amount">
+      <select id="type">
+        <option value="income">Income</option>
+        <option value="expense">Expense</option>
+      </select>
+      <button onclick="addTransaction()">Add</button>
+    </div>
+
+    <h2>Transactions</h2>
+    <ul id="transactionList"></ul>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
