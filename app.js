@@ -1,68 +1,514 @@
-let transactions = JSON.parse(localStorage.getItem("transactions")) || [];
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+import {
+  getAuth,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  getDocs,
+  query,
+  where,
+  orderBy,
+  doc,
+  updateDoc,
+  deleteDoc
+} from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
 
-const balanceEl = document.getElementById("balance");
-const totalIncomeEl = document.getElementById("totalIncome");
-const totalExpenseEl = document.getElementById("totalExpense");
-const transactionList = document.getElementById("transactionList");
+/** Firebase config */
+const firebaseConfig = {
+  apiKey: "AIzaSyCelkKn71my1hjGKpdhI0TNKwslZQQJf-0",
+  authDomain: "budgetpro-81f62.firebaseapp.com",
+  projectId: "budgetpro-81f62",
+  storageBucket: "budgetpro-81f62.firebasestorage.app",
+  messagingSenderId: "38847065741",
+  appId: "1:38847065741:web:6bea0d3193af2fdd3f3cc4"
+};
 
-function addTransaction() {
-  const description = document.getElementById("description").value.trim();
-  const amount = parseFloat(document.getElementById("amount").value);
-  const type = document.getElementById("type").value;
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
 
-  if (!description || !amount) return;
+/** DOM */
+const authScreen = document.getElementById("auth-screen");
+const appScreen = document.getElementById("app-screen");
 
-  const transaction = { description, amount, type };
-  transactions.push(transaction);
-  localStorage.setItem("transactions", JSON.stringify(transactions));
+const emailInput = document.getElementById("email");
+const passwordInput = document.getElementById("password");
+const signupBtn = document.getElementById("signup-btn");
+const loginBtn = document.getElementById("login-btn");
+const logoutBtn = document.getElementById("logout-btn");
+const userEmailEl = document.getElementById("user-email");
 
-  renderTransactions();
-  updateBalance();
+const toggleThemeBtn = document.getElementById("toggle-theme");
 
-  document.getElementById("description").value = "";
-  document.getElementById("amount").value = "";
+const prevMonthBtn = document.getElementById("prev-month");
+const nextMonthBtn = document.getElementById("next-month");
+const currentMonthEl = document.getElementById("current-month");
+
+const entryTitle = document.getElementById("entry-title");
+const typeSelect = document.getElementById("type");
+const amountInput = document.getElementById("amount");
+const categorySelect = document.getElementById("category");
+const nameInput = document.getElementById("name");
+const saveBtn = document.getElementById("save-btn");
+const clearBtn = document.getElementById("clear-btn");
+const cancelEditBtn = document.getElementById("cancel-edit-btn");
+
+const newCategoryInput = document.getElementById("new-category");
+const addCategoryBtn = document.getElementById("add-category-btn");
+const categoryListEl = document.getElementById("category-list");
+
+const txList = document.getElementById("transaction-list");
+const reportList = document.getElementById("report-list");
+const txCount = document.getElementById("tx-count");
+
+const statIncome = document.getElementById("stat-income");
+const statExpense = document.getElementById("stat-expense");
+const statNet = document.getElementById("stat-net");
+
+/** State */
+let currentUser = null;
+let monthOffset = 0;
+let categories = [];
+let editingTxId = null;
+
+const DEFAULT_CATEGORIES = ["Rent", "Groceries", "Utilities", "Amazon", "Gas", "Eating Out", "Other"];
+
+/** Theme */
+toggleThemeBtn?.addEventListener("click", () => {
+  document.body.classList.toggle("light");
+});
+
+/** Helpers */
+function monthLabel(d) {
+  return d.toLocaleString("default", { month: "long", year: "numeric" });
+}
+function getMonthRange(offset) {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth() + offset, 1, 0, 0, 0, 0);
+  const end = new Date(now.getFullYear(), now.getMonth() + offset + 1, 1, 0, 0, 0, 0);
+  return { start, end };
+}
+function money(n) {
+  const x = Number(n || 0);
+  return `$${x.toFixed(2)}`;
+}
+function cleanStr(s) {
+  return String(s || "").trim();
+}
+function toDate(val) {
+  if (!val) return new Date();
+  if (val instanceof Date) return val;
+  if (val.seconds) return new Date(val.seconds * 1000);
+  return new Date(val);
+}
+function setEditMode(on) {
+  if (on) {
+    entryTitle.textContent = "Edit transaction";
+    cancelEditBtn.classList.remove("hidden");
+  } else {
+    entryTitle.textContent = "Add transaction";
+    cancelEditBtn.classList.add("hidden");
+    editingTxId = null;
+  }
 }
 
-function removeTransaction(index) {
-  transactions.splice(index, 1);
-  localStorage.setItem("transactions", JSON.stringify(transactions));
-  renderTransactions();
-  updateBalance();
+/** Auth */
+signupBtn?.addEventListener("click", async () => {
+  const email = cleanStr(emailInput.value);
+  const pass = String(passwordInput.value || "");
+  try { await createUserWithEmailAndPassword(auth, email, pass); }
+  catch (e) { alert(e.message); }
+});
+
+loginBtn?.addEventListener("click", async () => {
+  const email = cleanStr(emailInput.value);
+  const pass = String(passwordInput.value || "");
+  try { await signInWithEmailAndPassword(auth, email, pass); }
+  catch (e) { alert(e.message); }
+});
+
+logoutBtn?.addEventListener("click", async () => {
+  await signOut(auth);
+});
+
+/** Month nav */
+prevMonthBtn?.addEventListener("click", () => { monthOffset -= 1; refreshMonth(); });
+nextMonthBtn?.addEventListener("click", () => { monthOffset += 1; refreshMonth(); });
+
+/** Clear fields */
+clearBtn?.addEventListener("click", () => { nameInput.value = ""; amountInput.value = ""; });
+cancelEditBtn?.addEventListener("click", () => {
+  setEditMode(false);
+  nameInput.value = "";
+  amountInput.value = "";
+});
+
+/** Categories */
+function renderCategories() {
+  categorySelect.innerHTML = "";
+
+  if (!categories || categories.length === 0) {
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = "No categories yet — add one below";
+    categorySelect.appendChild(opt);
+    categorySelect.disabled = true;
+    return;
+  }
+
+  categorySelect.disabled = false;
+
+  for (const c of categories) {
+    const opt = document.createElement("option");
+    opt.value = c;
+    opt.textContent = c;
+    categorySelect.appendChild(opt);
+  }
 }
 
-function renderTransactions() {
-  transactionList.innerHTML = "";
-  transactions.forEach((t, i) => {
+function renderCategoryList(catDocs) {
+  if (!categoryListEl) return;
+  categoryListEl.innerHTML = "";
+
+  if (!catDocs || catDocs.length === 0) {
     const li = document.createElement("li");
-    li.className = `transaction ${t.type}`;
-    li.innerHTML = `
-      <span>${t.description}: $${t.amount.toFixed(2)}</span>
-      <button onclick="removeTransaction(${i})">X</button>
-    `;
-    transactionList.appendChild(li);
-  });
+    li.className = "cat-item";
+    li.innerHTML = `<span class="muted">No saved categories yet.</span>`;
+    categoryListEl.appendChild(li);
+    return;
+  }
+
+  const sorted = [...catDocs].sort((a, b) => a.name.localeCompare(b.name));
+
+  for (const c of sorted) {
+    const li = document.createElement("li");
+    li.className = "cat-item";
+
+    const name = document.createElement("span");
+    name.textContent = c.name;
+
+    const del = document.createElement("button");
+    del.className = "icon-btn danger";
+    del.type = "button";
+    del.textContent = "Delete";
+    del.addEventListener("click", async () => {
+      const ok = confirm(`Delete category "${c.name}"? (Old transactions will still show it.)`);
+      if (!ok) return;
+
+      try {
+        await deleteDoc(doc(db, "categories", c.id));
+        await loadCategories();
+      } catch (e) {
+        alert("Could not delete category: " + e.message);
+      }
+    });
+
+    li.appendChild(name);
+    li.appendChild(del);
+    categoryListEl.appendChild(li);
+  }
 }
 
-function updateBalance() {
-  let balance = 0;
+async function ensureDefaultCategories() {
+  try {
+    const catRef = collection(db, "categories");
+    const qCats = query(catRef, where("uid", "==", currentUser.uid));
+    const snap = await getDocs(qCats);
+
+    if (snap.empty) {
+      for (const c of DEFAULT_CATEGORIES) {
+        await addDoc(catRef, { uid: currentUser.uid, name: c, createdAt: new Date() });
+      }
+    }
+  } catch (e) {
+    alert("Could not seed default categories: " + e.message);
+  }
+}
+
+async function loadCategories() {
+  try {
+    categorySelect.disabled = true;
+    categorySelect.innerHTML = `<option>Loading categories...</option>`;
+
+    const catRef = collection(db, "categories");
+    const qCats = query(catRef, where("uid", "==", currentUser.uid));
+    const snap = await getDocs(qCats);
+
+    const catDocs = snap.docs
+      .map(d => ({ id: d.id, name: d.data().name }))
+      .filter(x => x.name);
+
+    categories = catDocs.map(x => x.name);
+    categories.sort((a, b) => a.localeCompare(b));
+    if (!categories.length) categories = [...DEFAULT_CATEGORIES];
+
+    renderCategories();
+    renderCategoryList(catDocs);
+  } catch (e) {
+    alert("Could not load categories: " + e.message);
+    categories = [...DEFAULT_CATEGORIES];
+    renderCategories();
+    renderCategoryList([]);
+  }
+}
+
+addCategoryBtn?.addEventListener("click", async () => {
+  if (!currentUser) return;
+
+  const name = cleanStr(newCategoryInput.value);
+  if (!name) return alert("Type a category name first.");
+
+  if (categories.map(x => x.toLowerCase()).includes(name.toLowerCase())) {
+    newCategoryInput.value = "";
+    return alert("That category already exists.");
+  }
+
+  try {
+    await addDoc(collection(db, "categories"), {
+      uid: currentUser.uid,
+      name,
+      createdAt: new Date()
+    });
+
+    newCategoryInput.value = "";
+    await loadCategories();
+  } catch (e) {
+    alert("Could not add category: " + e.message);
+  }
+});
+
+/** Save/Add Transaction */
+saveBtn?.addEventListener("click", async () => {
+  if (!currentUser) return;
+
+  const type = typeSelect.value;
+  const category = categorySelect.value;
+  const amount = Number(amountInput.value);
+  const name = cleanStr(nameInput.value);
+
+  if (!category) return alert("Please select a category.");
+  if (!Number.isFinite(amount) || amount <= 0) return alert("Please enter a valid amount.");
+
+  if (editingTxId) {
+    await updateDoc(doc(db, "transactions", editingTxId), { type, category, name, amount });
+    setEditMode(false);
+  } else {
+    await addDoc(collection(db, "transactions"), {
+      uid: currentUser.uid,
+      type,
+      category,
+      name,
+      amount,
+      date: new Date()
+    });
+  }
+
+  amountInput.value = "";
+  nameInput.value = "";
+  await refreshMonth();
+});
+
+function txRow(tx) {
+  const li = document.createElement("li");
+  li.className = "tx-item";
+
+  const left = document.createElement("div");
+  left.className = "tx-left";
+
+  const title = document.createElement("div");
+  title.className = "tx-title";
+  title.textContent = tx.name?.trim() ? tx.name.trim() : tx.category;
+
+  const meta = document.createElement("div");
+  meta.className = "tx-meta";
+  const d = toDate(tx.date);
+  meta.textContent = `${tx.category} • ${d.toLocaleDateString()}`;
+
+  left.appendChild(title);
+  left.appendChild(meta);
+
+  const right = document.createElement("div");
+  right.className = "tx-right";
+
+  const badge = document.createElement("div");
+  badge.className = `badge ${tx.type}`;
+  badge.textContent = tx.type === "income" ? "Income" : "Expense";
+
+  const amt = document.createElement("div");
+  amt.className = "tx-amt";
+  amt.textContent = money(tx.amount);
+  amt.style.color = tx.type === "income" ? "var(--primary)" : "var(--danger)";
+
+  const editBtn = document.createElement("button");
+  editBtn.className = "icon-btn";
+  editBtn.type = "button";
+  editBtn.textContent = "Edit";
+  editBtn.addEventListener("click", () => {
+    typeSelect.value = tx.type || "expense";
+    amountInput.value = tx.amount ?? "";
+    nameInput.value = tx.name || "";
+
+    if (!categories.includes(tx.category)) {
+      categories.push(tx.category);
+      categories.sort((a, b) => a.localeCompare(b));
+      renderCategories();
+    }
+    categorySelect.value = tx.category;
+
+    editingTxId = tx.id;
+    setEditMode(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+
+  const delBtn = document.createElement("button");
+  delBtn.className = "icon-btn danger";
+  delBtn.type = "button";
+  delBtn.textContent = "Delete";
+  delBtn.addEventListener("click", async () => {
+    const ok = confirm("Delete this transaction?");
+    if (!ok) return;
+    await deleteDoc(doc(db, "transactions", tx.id));
+    if (editingTxId === tx.id) setEditMode(false);
+    await refreshMonth();
+  });
+
+  right.appendChild(badge);
+  right.appendChild(amt);
+  right.appendChild(editBtn);
+  right.appendChild(delBtn);
+
+  li.appendChild(left);
+  li.appendChild(right);
+  return li;
+}
+
+/** Load transactions */
+async function loadTransactionsForMonth(offset) {
+  const { start, end } = getMonthRange(offset);
+  currentMonthEl.textContent = monthLabel(start);
+
+  txList.innerHTML = "";
+  reportList.innerHTML = "";
+  txCount.textContent = "0 items";
+
+  const txRef = collection(db, "transactions");
+  const qTx = query(
+    txRef,
+    where("uid", "==", currentUser.uid),
+    where("date", ">=", start),
+    where("date", "<", end),
+    orderBy("date", "desc")
+  );
+
+  let snap;
+  try {
+    snap = await getDocs(qTx);
+  } catch (e) {
+    alert("Could not load transactions: " + e.message);
+    return;
+  }
+
+  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+  items.forEach(tx => txList.appendChild(txRow(tx)));
+  txCount.textContent = `${items.length} item${items.length === 1 ? "" : "s"}`;
+
   let income = 0;
   let expense = 0;
+  const catTotals = {};
 
-  transactions.forEach(t => {
-    if (t.type === "income") {
-      income += t.amount;
-      balance += t.amount;
-    } else {
-      expense += t.amount;
-      balance -= t.amount;
-    }
+  for (const tx of items) {
+    const amt = Number(tx.amount || 0);
+    if (tx.type === "income") income += amt;
+    else expense += amt;
+
+    const key = `${tx.type}:${tx.category}`;
+    catTotals[key] = (catTotals[key] || 0) + amt;
+  }
+
+  statIncome.textContent = money(income);
+  statExpense.textContent = money(expense);
+  statNet.textContent = money(income - expense);
+  statNet.style.color = (income - expense) >= 0 ? "var(--primary)" : "var(--danger)";
+
+  const entries = Object.entries(catTotals).sort((a,b)=>b[1]-a[1]);
+  if (!entries.length) {
+    const li = document.createElement("li");
+    li.className = "tx-item";
+    li.textContent = "No transactions for this month yet.";
+    reportList.appendChild(li);
+    return;
+  }
+
+  entries.forEach(([key, amt]) => {
+    const [type, cat] = key.split(":");
+    const li = document.createElement("li");
+    li.className = "tx-item";
+
+    const left = document.createElement("div");
+    left.className = "tx-left";
+
+    const title = document.createElement("div");
+    title.className = "tx-title";
+    title.textContent = cat;
+
+    const meta = document.createElement("div");
+    meta.className = "tx-meta";
+    meta.textContent = type === "income" ? "Income total" : "Expense total";
+
+    left.appendChild(title);
+    left.appendChild(meta);
+
+    const right = document.createElement("div");
+    right.className = "tx-right";
+
+    const badge = document.createElement("div");
+    badge.className = `badge ${type}`;
+    badge.textContent = type === "income" ? "Income" : "Expense";
+
+    const val = document.createElement("div");
+    val.className = "tx-amt";
+    val.textContent = money(amt);
+    val.style.color = type === "income" ? "var(--primary)" : "var(--danger)";
+
+    right.appendChild(badge);
+    right.appendChild(val);
+
+    li.appendChild(left);
+    li.appendChild(right);
+
+    reportList.appendChild(li);
   });
-
-  balanceEl.textContent = `$${balance.toFixed(2)}`;
-  totalIncomeEl.textContent = `$${income.toFixed(2)}`;
-  totalExpenseEl.textContent = `$${expense.toFixed(2)}`;
 }
 
-// Initial render
-renderTransactions();
-updateBalance();
+async function refreshMonth() {
+  if (!currentUser) return;
+  await loadTransactionsForMonth(monthOffset);
+}
+
+/** Auth state */
+onAuthStateChanged(auth, async (user) => {
+  if (!user) {
+    currentUser = null;
+    authScreen.classList.remove("hidden");
+    appScreen.classList.add("hidden");
+    setEditMode(false);
+    return;
+  }
+
+  currentUser = user;
+  userEmailEl.textContent = user.email;
+
+  authScreen.classList.add("hidden");
+  appScreen.classList.remove("hidden");
+
+  await ensureDefaultCategories();
+  await loadCategories();
+  await refreshMonth();
+});

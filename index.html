@@ -1,43 +1,161 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Budget Pro</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="container">
-    <h1>💰 Budget Pro</h1>
-    
-    <div class="balance-container">
-      <div class="balance-card">
-        <h3>Total Balance</h3>
-        <p id="balance">$0.00</p>
-      </div>
-      <div class="balance-card income-card">
-        <h3>Total Income</h3>
-        <p id="totalIncome">$0.00</p>
-      </div>
-      <div class="balance-card expense-card">
-        <h3>Total Expense</h3>
-        <p id="totalExpense">$0.00</p>
-      </div>
-    </div>
+  <div class="bg"></div>
 
-    <div class="input-container">
-      <input type="text" id="description" placeholder="Description">
-      <input type="number" id="amount" placeholder="Amount">
-      <select id="type">
-        <option value="income">Income</option>
-        <option value="expense">Expense</option>
-      </select>
-      <button onclick="addTransaction()">Add</button>
-    </div>
+  <main class="shell">
+    <header class="app-header">
+      <div class="brand">
+        <div class="logo">BP</div>
+        <div class="brand-text">
+          <h1>Budget Pro</h1>
+          <p class="sub">Simple. Clean. Yours.</p>
+        </div>
+      </div>
 
-    <h2>Transactions</h2>
-    <ul id="transactionList"></ul>
-  </div>
+      <div class="header-actions">
+        <button class="btn ghost" id="toggle-theme" type="button">Dark/Light</button>
+      </div>
+    </header>
 
-  <script src="app.js"></script>
+    <!-- AUTH -->
+    <section id="auth-screen" class="card auth-card">
+      <h2>Welcome back</h2>
+      <p class="muted">Sign in to see your categories, transactions, and monthly reports.</p>
+
+      <div class="grid">
+        <label class="field">
+          <span>Email</span>
+          <input type="email" id="email" placeholder="you@email.com" autocomplete="email" />
+        </label>
+
+        <label class="field">
+          <span>Password</span>
+          <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" />
+        </label>
+      </div>
+
+      <div class="row">
+        <button class="btn primary" id="login-btn" type="button">Log in</button>
+        <button class="btn" id="signup-btn" type="button">Sign up</button>
+      </div>
+
+      <p class="tiny muted">Tip: Password usually must be 6+ characters.</p>
+    </section>
+
+    <!-- APP -->
+    <section id="app-screen" class="hidden">
+      <div class="topbar card">
+        <div class="who">
+          <div class="pill">Signed in as</div>
+          <div id="user-email" class="email"></div>
+        </div>
+        <div class="top-actions">
+          <button class="btn ghost" id="logout-btn" type="button">Logout</button>
+        </div>
+      </div>
+
+      <section class="card dashboard">
+        <div class="dash-head">
+          <div class="month-nav">
+            <button class="btn ghost" id="prev-month" type="button">←</button>
+            <div>
+              <h2 id="current-month">—</h2>
+              <p class="muted small">Auto groups by month. Switch months anytime.</p>
+            </div>
+            <button class="btn ghost" id="next-month" type="button">→</button>
+          </div>
+        </div>
+
+        <div class="stats">
+          <div class="stat">
+            <div class="label">Income</div>
+            <div class="value" id="stat-income">$0.00</div>
+          </div>
+          <div class="stat">
+            <div class="label">Expense</div>
+            <div class="value" id="stat-expense">$0.00</div>
+          </div>
+          <div class="stat">
+            <div class="label">Net</div>
+            <div class="value" id="stat-net">$0.00</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card entry">
+        <h3 id="entry-title">Add transaction</h3>
+
+        <div class="entry-grid">
+          <label class="field">
+            <span>Type</span>
+            <select id="type">
+              <option value="expense" selected>Expense</option>
+              <option value="income">Income</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Amount</span>
+            <input type="number" id="amount" placeholder="e.g. 49.99" inputmode="decimal" />
+          </label>
+
+          <label class="field">
+            <span>Category</span>
+            <select id="category"></select>
+          </label>
+
+          <label class="field span2">
+            <span>Transaction name (optional)</span>
+            <input type="text" id="name" placeholder="Optional note… (Amazon Prime, Rent, etc.)" />
+          </label>
+
+          <div class="span2 row">
+            <button class="btn primary" id="save-btn" type="button">Save</button>
+            <button class="btn" id="clear-btn" type="button">Clear</button>
+            <button class="btn danger hidden" id="cancel-edit-btn" type="button">Cancel edit</button>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <h3>Categories</h3>
+        <div class="row">
+          <input type="text" id="new-category" placeholder="Add category (Amazon, Netflix, Gas…)" />
+          <button class="btn" id="add-category-btn" type="button">Add category</button>
+        </div>
+
+        <ul id="category-list" class="cat-list"></ul>
+
+        <p class="tiny muted">Deleting a category won’t change old transactions — it just removes it from the dropdown.</p>
+      </section>
+
+      <section class="grid-2">
+        <section class="card">
+          <div class="card-head">
+            <h3>Transactions (this month)</h3>
+            <p class="muted small" id="tx-count">0 items</p>
+          </div>
+          <ul id="transaction-list" class="tx-list"></ul>
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <h3>Category breakdown</h3>
+            <p class="muted small">Totals for selected month</p>
+          </div>
+          <ul id="report-list" class="report-list"></ul>
+        </section>
+      </section>
+    </section>
+  </main>
+
+  <script type="module" src="app.js"></script>
 </body>
 </html>
