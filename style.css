@@ -252,3 +252,11 @@ body.light input::placeholder{color: rgba(11,18,32,.45)}
 select { color: var(--text); }
 select option { background: #0b1220; color: #eaf0ff; }
 body.light select option { background: #ffffff; color: #0b1220; }
+/* Auth screen spacing fix */
+.auth-card .grid{
+  margin-bottom: 12px;
+}
+
+.auth-card .row{
+  margin-top: 6px;
+}

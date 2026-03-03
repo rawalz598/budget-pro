@@ -24,29 +24,65 @@
       </div>
     </header>
 
-    <!-- AUTH -->
-    <section id="auth-screen" class="card auth-card">
-      <h2>Welcome back</h2>
-      <p class="muted">Sign in to see your categories, transactions, and monthly reports.</p>
+    <!-- AUTH WRAPPER -->
+    <section id="auth-wrapper">
 
-      <div class="grid">
-        <label class="field">
-          <span>Email</span>
-          <input type="email" id="email" placeholder="you@email.com" autocomplete="email" />
-        </label>
+      <!-- LOGIN -->
+      <section id="login-screen" class="card auth-card">
+        <h2>Log in</h2>
+        <p class="muted">Access your categories, transactions, and monthly reports.</p>
 
-        <label class="field">
-          <span>Password</span>
-          <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" />
-        </label>
-      </div>
+        <div class="grid">
+          <label class="field">
+            <span>Email</span>
+            <input type="email" id="login-email" placeholder="you@email.com" autocomplete="email" />
+          </label>
 
-      <div class="row">
-        <button class="btn primary" id="login-btn" type="button">Log in</button>
-        <button class="btn" id="signup-btn" type="button">Sign up</button>
-      </div>
+          <label class="field">
+            <span>Password</span>
+            <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" />
+          </label>
+        </div>
 
-      <p class="tiny muted">Tip: Password usually must be 6+ characters.</p>
+        <div class="row">
+          <button class="btn primary" id="login-btn" type="button">Log in</button>
+          <button class="btn ghost" id="go-signup-btn" type="button">Create account</button>
+          <button class="btn ghost" id="reset-btn" type="button">Forgot password</button>
+        </div>
+
+        <p class="tiny muted">Tip: Password must be 6+ characters.</p>
+      </section>
+
+      <!-- SIGNUP -->
+      <section id="signup-screen" class="card auth-card hidden">
+        <h2>Create account</h2>
+        <p class="muted">Make a new account. Your data stays private to your login.</p>
+
+        <div class="grid">
+          <label class="field">
+            <span>Email</span>
+            <input type="email" id="signup-email" placeholder="you@email.com" autocomplete="email" />
+          </label>
+
+          <label class="field">
+            <span>Password</span>
+            <input type="password" id="signup-password" placeholder="Create a password" autocomplete="new-password" />
+          </label>
+
+          <label class="field">
+            <span>Confirm password</span>
+            <input type="password" id="signup-confirm" placeholder="Confirm password" autocomplete="new-password" />
+          </label>
+        </div>
+
+        <div class="row">
+          <button class="btn primary" id="signup-btn" type="button">Sign up</button>
+          <button class="btn ghost" id="back-login-btn" type="button">Back to login</button>
+        </div>
+
+        <p class="tiny muted">Tip: Password must be 6+ characters.</p>
+      </section>
+
     </section>
 
     <!-- APP -->

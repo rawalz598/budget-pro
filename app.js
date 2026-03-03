@@ -3,6 +3,7 @@ import {
   getAuth,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  sendPasswordResetEmail,
   signOut,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
@@ -13,10 +14,10 @@ import {
   getDocs,
   query,
   where,
-  orderBy,
   doc,
   updateDoc,
-  deleteDoc
+  deleteDoc,
+  orderBy
 } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
 
 /** Firebase config */
@@ -33,14 +34,25 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-/** DOM */
-const authScreen = document.getElementById("auth-screen");
-const appScreen = document.getElementById("app-screen");
+/** AUTH DOM */
+const authWrapper = document.getElementById("auth-wrapper");
+const loginScreen = document.getElementById("login-screen");
+const signupScreen = document.getElementById("signup-screen");
 
-const emailInput = document.getElementById("email");
-const passwordInput = document.getElementById("password");
-const signupBtn = document.getElementById("signup-btn");
+const loginEmail = document.getElementById("login-email");
+const loginPassword = document.getElementById("login-password");
 const loginBtn = document.getElementById("login-btn");
+const goSignupBtn = document.getElementById("go-signup-btn");
+const resetBtn = document.getElementById("reset-btn");
+
+const signupEmail = document.getElementById("signup-email");
+const signupPassword = document.getElementById("signup-password");
+const signupConfirm = document.getElementById("signup-confirm");
+const signupBtn = document.getElementById("signup-btn");
+const backLoginBtn = document.getElementById("back-login-btn");
+
+/** APP DOM */
+const appScreen = document.getElementById("app-screen");
 const logoutBtn = document.getElementById("logout-btn");
 const userEmailEl = document.getElementById("user-email");
 
@@ -85,6 +97,8 @@ toggleThemeBtn?.addEventListener("click", () => {
 });
 
 /** Helpers */
+function cleanStr(s) { return String(s || "").trim(); }
+
 function monthLabel(d) {
   return d.toLocaleString("default", { month: "long", year: "numeric" });
 }
@@ -97,9 +111,6 @@ function getMonthRange(offset) {
 function money(n) {
   const x = Number(n || 0);
   return `$${x.toFixed(2)}`;
-}
-function cleanStr(s) {
-  return String(s || "").trim();
 }
 function toDate(val) {
   if (!val) return new Date();
@@ -118,35 +129,86 @@ function setEditMode(on) {
   }
 }
 
-/** Auth */
-signupBtn?.addEventListener("click", async () => {
-  const email = cleanStr(emailInput.value);
-  const pass = String(passwordInput.value || "");
-  try { await createUserWithEmailAndPassword(auth, email, pass); }
-  catch (e) { alert(e.message); }
-});
+/** Auth screen switching */
+function showLogin() {
+  loginScreen.classList.remove("hidden");
+  signupScreen.classList.add("hidden");
+}
+function showSignup() {
+  signupScreen.classList.remove("hidden");
+  loginScreen.classList.add("hidden");
+}
 
+goSignupBtn?.addEventListener("click", () => showSignup());
+backLoginBtn?.addEventListener("click", () => showLogin());
+
+/** LOGIN */
 loginBtn?.addEventListener("click", async () => {
-  const email = cleanStr(emailInput.value);
-  const pass = String(passwordInput.value || "");
-  try { await signInWithEmailAndPassword(auth, email, pass); }
-  catch (e) { alert(e.message); }
+  const email = cleanStr(loginEmail.value);
+  const pass = String(loginPassword.value || "");
+
+  if (!email || !pass) return alert("Enter email and password.");
+
+  try {
+    await signInWithEmailAndPassword(auth, email, pass);
+  } catch (error) {
+    if (error.code === "auth/wrong-password" || error.code === "auth/invalid-login-credentials") {
+      alert("Wrong password. Try again or use 'Forgot password'.");
+    } else if (error.code === "auth/user-not-found") {
+      alert("No account found with that email. Click 'Create account'.");
+    } else if (error.code === "auth/invalid-email") {
+      alert("That email doesn’t look valid.");
+    } else {
+      alert(error.message);
+    }
+  }
 });
 
+/** SIGNUP */
+signupBtn?.addEventListener("click", async () => {
+  const email = cleanStr(signupEmail.value);
+  const pass = String(signupPassword.value || "");
+  const confirm = String(signupConfirm.value || "");
+
+  if (!email || !pass || !confirm) return alert("Fill in all fields.");
+  if (pass.length < 6) return alert("Password must be at least 6 characters.");
+  if (pass !== confirm) return alert("Passwords do not match.");
+
+  try {
+    await createUserWithEmailAndPassword(auth, email, pass);
+  } catch (error) {
+    if (error.code === "auth/email-already-in-use") {
+      alert("This email already has an account. Go back and log in.");
+    } else if (error.code === "auth/invalid-email") {
+      alert("That email doesn’t look valid.");
+    } else {
+      alert(error.message);
+    }
+  }
+});
+
+/** FORGOT PASSWORD */
+resetBtn?.addEventListener("click", async () => {
+  const email = cleanStr(loginEmail.value);
+  if (!email) return alert("Enter your email first, then click Forgot password.");
+
+  try {
+    await sendPasswordResetEmail(auth, email);
+    alert("Reset email sent. Check your inbox (and spam).");
+  } catch (error) {
+    if (error.code === "auth/user-not-found") {
+      alert("No account found with that email.");
+    } else if (error.code === "auth/invalid-email") {
+      alert("That email doesn’t look valid.");
+    } else {
+      alert(error.message);
+    }
+  }
+});
+
+/** LOGOUT */
 logoutBtn?.addEventListener("click", async () => {
   await signOut(auth);
-});
-
-/** Month nav */
-prevMonthBtn?.addEventListener("click", () => { monthOffset -= 1; refreshMonth(); });
-nextMonthBtn?.addEventListener("click", () => { monthOffset += 1; refreshMonth(); });
-
-/** Clear fields */
-clearBtn?.addEventListener("click", () => { nameInput.value = ""; amountInput.value = ""; });
-cancelEditBtn?.addEventListener("click", () => {
-  setEditMode(false);
-  nameInput.value = "";
-  amountInput.value = "";
 });
 
 /** Categories */
@@ -163,7 +225,6 @@ function renderCategories() {
   }
 
   categorySelect.disabled = false;
-
   for (const c of categories) {
     const opt = document.createElement("option");
     opt.value = c;
@@ -216,18 +277,13 @@ function renderCategoryList(catDocs) {
 }
 
 async function ensureDefaultCategories() {
-  try {
-    const catRef = collection(db, "categories");
-    const qCats = query(catRef, where("uid", "==", currentUser.uid));
-    const snap = await getDocs(qCats);
+  const catRef = collection(db, "categories");
+  const snap = await getDocs(query(catRef, where("uid", "==", currentUser.uid)));
 
-    if (snap.empty) {
-      for (const c of DEFAULT_CATEGORIES) {
-        await addDoc(catRef, { uid: currentUser.uid, name: c, createdAt: new Date() });
-      }
+  if (snap.empty) {
+    for (const c of DEFAULT_CATEGORIES) {
+      await addDoc(catRef, { uid: currentUser.uid, name: c, createdAt: new Date() });
     }
-  } catch (e) {
-    alert("Could not seed default categories: " + e.message);
   }
 }
 
@@ -237,15 +293,13 @@ async function loadCategories() {
     categorySelect.innerHTML = `<option>Loading categories...</option>`;
 
     const catRef = collection(db, "categories");
-    const qCats = query(catRef, where("uid", "==", currentUser.uid));
-    const snap = await getDocs(qCats);
+    const snap = await getDocs(query(catRef, where("uid", "==", currentUser.uid)));
 
     const catDocs = snap.docs
       .map(d => ({ id: d.id, name: d.data().name }))
       .filter(x => x.name);
 
-    categories = catDocs.map(x => x.name);
-    categories.sort((a, b) => a.localeCompare(b));
+    categories = catDocs.map(x => x.name).sort((a, b) => a.localeCompare(b));
     if (!categories.length) categories = [...DEFAULT_CATEGORIES];
 
     renderCategories();
@@ -275,7 +329,6 @@ addCategoryBtn?.addEventListener("click", async () => {
       name,
       createdAt: new Date()
     });
-
     newCategoryInput.value = "";
     await loadCategories();
   } catch (e) {
@@ -283,7 +336,7 @@ addCategoryBtn?.addEventListener("click", async () => {
   }
 });
 
-/** Save/Add Transaction */
+/** Transactions */
 saveBtn?.addEventListener("click", async () => {
   if (!currentUser) return;
 
@@ -312,6 +365,17 @@ saveBtn?.addEventListener("click", async () => {
   amountInput.value = "";
   nameInput.value = "";
   await refreshMonth();
+});
+
+clearBtn?.addEventListener("click", () => {
+  nameInput.value = "";
+  amountInput.value = "";
+});
+
+cancelEditBtn?.addEventListener("click", () => {
+  setEditMode(false);
+  nameInput.value = "";
+  amountInput.value = "";
 });
 
 function txRow(tx) {
@@ -388,7 +452,6 @@ function txRow(tx) {
   return li;
 }
 
-/** Load transactions */
 async function loadTransactionsForMonth(offset) {
   const { start, end } = getMonthRange(offset);
   currentMonthEl.textContent = monthLabel(start);
@@ -406,14 +469,7 @@ async function loadTransactionsForMonth(offset) {
     orderBy("date", "desc")
   );
 
-  let snap;
-  try {
-    snap = await getDocs(qTx);
-  } catch (e) {
-    alert("Could not load transactions: " + e.message);
-    return;
-  }
-
+  const snap = await getDocs(qTx);
   const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
   items.forEach(tx => txList.appendChild(txRow(tx)));
@@ -492,20 +548,30 @@ async function refreshMonth() {
   await loadTransactionsForMonth(monthOffset);
 }
 
+prevMonthBtn?.addEventListener("click", () => { monthOffset -= 1; refreshMonth(); });
+nextMonthBtn?.addEventListener("click", () => { monthOffset += 1; refreshMonth(); });
+
 /** Auth state */
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
     currentUser = null;
-    authScreen.classList.remove("hidden");
     appScreen.classList.add("hidden");
+    authWrapper.classList.remove("hidden");
+    showLogin();
     setEditMode(false);
     return;
   }
 
   currentUser = user;
+
+  // clear auth inputs
+  loginPassword.value = "";
+  signupPassword.value = "";
+  signupConfirm.value = "";
+
   userEmailEl.textContent = user.email;
 
-  authScreen.classList.add("hidden");
+  authWrapper.classList.add("hidden");
   appScreen.classList.remove("hidden");
 
   await ensureDefaultCategories();
